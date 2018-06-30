@@ -106,7 +106,7 @@ func replaceStringInFile(filePath string, oldValue string, newValue string) erro
 	return nil
 }
 
-func makeSourceCode(handlerRepository string) (string, error) {
+func prepareSourceCode(handlerRepository string) (string, error) {
 	tempDir, err := ioutil.TempDir("", "cubes_")
 	if err != nil {
 		log.Fatalf("Can't create temp directory %v/n", err)
@@ -115,8 +115,7 @@ func makeSourceCode(handlerRepository string) (string, error) {
 
 	log.Print("Temp directory is created: ", tempDir)
 
-	os.MkdirAll(filepath.Join(tempDir, "src"), os.ModePerm)
-	os.Chdir(filepath.Join(tempDir, "src"))
+	os.Chdir(tempDir)
 
 	//os.Remove(filepath.Join(tempDir))
 	err = cloneGitRepository("https://github.com/akaumov/cube_executor.git", "cube")
@@ -125,24 +124,19 @@ func makeSourceCode(handlerRepository string) (string, error) {
 		return "", err
 	}
 
-	replaceStringInFile(filepath.Join(tempDir, "src", "cube", "cube.go"),"github.com/akaumov/echo-cube", handlerRepository)
-
-	os.Setenv("GOPATH", tempDir)
-	os.Chdir(filepath.Join(tempDir, "src", "cube"))
-
-	err = depEnsure()
+	err = replaceStringInFile(filepath.Join(tempDir, "cube", "cube.go"),"github.com/akaumov/echo-cube", handlerRepository)
 	if err != nil {
-		log.Fatalf("Can't download dependencies %v/n", err)
+		log.Fatalf("Can't set handler: %v/n", err)
 		return "", err
 	}
 
-	return filepath.Join(tempDir, "src", "cube"), nil
+	return filepath.Join(tempDir, "cube"), nil
 }
 
 func (c *CubesServer) Start() {
 	pullImage("golang:1.10-alpine")
 
-	sourceCodePath, err := makeSourceCode("github.com/akaumov/echo-cube")
+	sourceCodePath, err := prepareSourceCode("github.com/akaumov/echo-cube")
 	if err != nil {
 		log.Fatalf("Can't clone executor repository %v/n", err)
 	}
