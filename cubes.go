@@ -14,7 +14,8 @@ import (
 	"strings"
 )
 
-const go_image = "golang:1.10-alpine"
+const cube_compiler_image = "azatk/cube-compiler:latest"
+const cube_instance_image = "azatk/cube-instance:latest"
 
 type CubesServer struct {
 }
@@ -47,7 +48,7 @@ func pullImage(image string) error {
 	return nil
 }
 
-func compileGo() error {
+func compileCube(cubePackage string, outputDir string) error {
 	ctx := context.Background()
 	client, err := docker_client.NewEnvClient()
 
@@ -59,13 +60,13 @@ func compileGo() error {
 	defer client.Close()
 
 	resp, err := client.ContainerCreate(ctx, &container.Config{
-		Image: go_image,
-		Cmd:   []string{"go", "build -x -v -o ./build/cube ./cmd/cube"},
+		Image: cube_compiler_image,
 		Tty:   true,
+		Env:   []string{"CUBE_PACKAGE=" + cubePackage},
 	}, &container.HostConfig{
 		AutoRemove: true,
+		Binds:      []string{outputDir + ":/build:rw"},
 	}, nil, "")
-
 
 	if err != nil {
 		log.Fatalf("can't create docker container:\n%v", err)
@@ -74,6 +75,52 @@ func compileGo() error {
 
 	if err := client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		log.Fatalf("can't start docker container:\n%v", err)
+		return err
+	}
+
+	return nil
+}
+
+func runCubeInstance(appPath string) error {
+	ctx := context.Background()
+	client, err := docker_client.NewEnvClient()
+
+	if err != nil {
+		log.Fatalf("can't connect to docker service:\n%v", err)
+		return err
+	}
+
+	defer client.Close()
+
+	resp, err := client.ContainerCreate(ctx, &container.Config{
+		Image: cube_instance_image,
+		Tty:   true,
+	}, &container.HostConfig{
+		AutoRemove: false,
+	}, nil, "")
+
+	if err != nil {
+		log.Fatalf("can't create docker container:\n%v", err)
+		return err
+	}
+
+	file, err := os.Open(appPath)
+	if err != nil {
+		log.Fatalf("can't read compiled cube:\n%v", err)
+		return err
+	}
+
+	err = client.CopyToContainer(ctx, resp.ID, "/home/app", file, types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: true,
+	})
+
+	if err != nil {
+		log.Fatalf("can't copy compiled app to instance container:\n%v", err)
+		return err
+	}
+
+	if err := client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		log.Fatalf("can't start  instance container:\n%v", err)
 		return err
 	}
 
@@ -90,7 +137,7 @@ func cloneGitRepository(repo string, outputDir string) error {
 	return cmd.Run()
 }
 
-func replaceStringInFile(filePath string, oldValue string, newValue string) error  {
+func replaceStringInFile(filePath string, oldValue string, newValue string) error {
 	read, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return err
@@ -124,7 +171,7 @@ func prepareSourceCode(handlerRepository string) (string, error) {
 		return "", err
 	}
 
-	err = replaceStringInFile(filepath.Join(tempDir, "cube", "cube.go"),"github.com/akaumov/echo-cube", handlerRepository)
+	err = replaceStringInFile(filepath.Join(tempDir, "cube", "cube.go"), "github.com/akaumov/echo-cube", handlerRepository)
 	if err != nil {
 		log.Fatalf("Can't set handler: %v/n", err)
 		return "", err
@@ -134,12 +181,23 @@ func prepareSourceCode(handlerRepository string) (string, error) {
 }
 
 func (c *CubesServer) Start() {
-	pullImage("golang:1.10-alpine")
+	pullImage(cube_compiler_image)
 
-	sourceCodePath, err := prepareSourceCode("github.com/akaumov/echo-cube")
+	tempDir, err := ioutil.TempDir("", "cubes_")
 	if err != nil {
-		log.Fatalf("Can't clone executor repository %v/n", err)
+		log.Fatalf("Can't create temp directory for build %v/n", err)
+		panic(err)
 	}
 
-	//compileGo()
+	err = compileCube("github.com/akaumov/echo-cube", tempDir)
+	if err != nil {
+		log.Fatalf("Can't compile cube %v/n", err)
+		panic(err)
+	}
+
+	err = runCubeInstance(filepath.Join(tempDir, "cube.tar"))
+	if err != nil {
+		log.Fatalf("Can't run cube instance %v/n", err)
+		panic(err)
+	}
 }
