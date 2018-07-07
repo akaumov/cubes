@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cubes/global"
 	"cubes/instance"
 	"fmt"
 	"github.com/urfave/cli"
@@ -22,6 +23,17 @@ func main() {
 			Name:   "init",
 			Usage:  "init project",
 			Action: initProject,
+		},
+		{
+			Name:  "bus",
+			Usage: "cubes bus",
+			Subcommands: []cli.Command{
+				{
+					Name:   "start",
+					Usage:  "start cubes bus",
+					Action: startBus,
+				},
+			},
 		},
 		{
 			Name:  "instance",
@@ -48,8 +60,8 @@ func main() {
 					Action:    instanceAdd,
 				},
 				{
-					Name:  "config",
-					Usage: "get cube instance config",
+					Name:      "config",
+					Usage:     "get cube instance config",
 					ArgsUsage: "instanceName",
 					Action:    instanceConfig,
 				},
@@ -60,12 +72,9 @@ func main() {
 					Action:    instanceRemove,
 				},
 				{
-					Name:  "start",
-					Usage: "start cube instance",
-					Action: func(c *cli.Context) error {
-						log.Println("start instance")
-						return nil
-					},
+					Name:   "start",
+					Usage:  "start cube instance",
+					Action: instanceStart,
 				},
 				{
 					Name:  "stop",
@@ -109,7 +118,8 @@ func parseChannelsMapping(channelsMappingRaw string) (*map[string]string, error)
 
 func parsePortsMapping(portsMappingRaw string) (*[]instance.PortMap, error) {
 
-	var portsMapping []instance.PortMap
+	portsMapping := []instance.PortMap{}
+
 	if portsMappingRaw != "" {
 
 		for _, rawMap := range strings.Split(portsMappingRaw, ";") {
@@ -220,11 +230,10 @@ func instanceConfig(c *cli.Context) error {
 		return fmt.Errorf("instance name is required")
 	}
 
-	config, err := instance.GetConfig(name)
+	config, err := instance.GetConfigText(name)
 	fmt.Println(config)
 	return err
 }
-
 
 func instanceRemove(c *cli.Context) error {
 	args := c.Args()
@@ -235,4 +244,19 @@ func instanceRemove(c *cli.Context) error {
 	}
 
 	return instance.Remove(name)
+}
+
+func instanceStart(c *cli.Context) error {
+	args := c.Args()
+	name := args.Get(0)
+
+	if name == "" {
+		return fmt.Errorf("instance name is required")
+	}
+
+	return instance.Start(name)
+}
+
+func startBus(c *cli.Context) error {
+	return global.StartBus()
 }
