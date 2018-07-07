@@ -107,7 +107,8 @@ func Remove(name string) error {
 
 		return err
 	}
-	return os.Remove(name)
+
+	return os.Remove(instanceConfigPath)
 }
 
 func GetConfig(name string) (string, error) {

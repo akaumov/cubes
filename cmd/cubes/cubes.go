@@ -79,7 +79,6 @@ func main() {
 	}
 }
 
-
 func parseChannelsMapping(channelsMappingRaw string) (*map[string]string, error) {
 	channelsMapping := map[string]string{}
 
@@ -208,8 +207,8 @@ func instanceAdd(c *cli.Context) error {
 
 func instanceRemove(c *cli.Context) error {
 	args := c.Args()
-
 	name := args.Get(0)
+
 	if name == "" {
 		return fmt.Errorf("instance name is required")
 	}
