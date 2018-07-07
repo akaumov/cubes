@@ -95,6 +95,7 @@ func Add(name string, source string, params map[string]string, portsMapping []Po
 }
 
 func Remove(name string) error {
+	//TODO: check instance state
 	instanceConfigPath, err := getInstanceConfigPath(name)
 	if err != nil {
 		return err
@@ -112,12 +113,12 @@ func Remove(name string) error {
 }
 
 func GetConfig(name string) (string, error) {
-	pwd, err := os.Getwd()
+	instanceConfigPath, err := getInstanceConfigPath(name)
 	if err != nil {
-		return "", err
+		return "", nil
 	}
 
-	instanceConfig, err := ioutil.ReadFile(filepath.Join(pwd, name+".json"))
+	instanceConfig, err := ioutil.ReadFile(instanceConfigPath)
 	return string(instanceConfig), nil
 }
 

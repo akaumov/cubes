@@ -44,8 +44,14 @@ func main() {
 							Usage: "params: --params 'param1:Value1;param2:Value2'",
 						},
 					},
-					ArgsUsage: "[-ports] [-channels] name source",
+					ArgsUsage: "[--ports] [--channels] [--params] name source",
 					Action:    instanceAdd,
+				},
+				{
+					Name:  "config",
+					Usage: "get cube instance config",
+					ArgsUsage: "instanceName",
+					Action:    instanceConfig,
 				},
 				{
 					Name:      "remove",
@@ -204,6 +210,21 @@ func instanceAdd(c *cli.Context) error {
 
 	return err
 }
+
+func instanceConfig(c *cli.Context) error {
+	args := c.Args()
+
+	//TODO: add instance name format check
+	name := args.Get(0)
+	if name == "" {
+		return fmt.Errorf("instance name is required")
+	}
+
+	config, err := instance.GetConfig(name)
+	fmt.Println(config)
+	return err
+}
+
 
 func instanceRemove(c *cli.Context) error {
 	args := c.Args()
