@@ -140,6 +140,29 @@ func parsePortsMapping(portsMappingRaw string) (*[]instance.PortMap, error) {
 	return &portsMapping, nil
 }
 
+func parseInstanceParams(rawParams string) (*map[string]string, error) {
+
+	params := map[string]string{}
+
+	if rawParams != "" {
+
+		for _, rawMap := range strings.Split(rawParams, ";") {
+			splittedMap := strings.Split(rawMap, ":")
+
+			if len(splittedMap) != 2 {
+				return nil, fmt.Errorf("Wrong params format: %v\n", rawMap)
+			}
+
+			key := splittedMap[0]
+			value := splittedMap[1]
+
+			params[key] = value
+		}
+	}
+
+	return &params, nil
+}
+
 func instanceAdd(c *cli.Context) error {
 	args := c.Args()
 
@@ -166,10 +189,16 @@ func instanceAdd(c *cli.Context) error {
 		return err
 	}
 
+	paramsRaw := c.String("params")
+	params, err := parseInstanceParams(paramsRaw)
+	if err != nil {
+		return err
+	}
+
 	err = instance.Add(
 		name,
 		source,
-		map[string]string{},
+		*params,
 		*portsMapping,
 		*channelsMapping,
 	)
