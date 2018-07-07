@@ -39,6 +39,10 @@ func main() {
 							Name:  "ports",
 							Usage: "ports mapping: --ports 'hostPort:handlerPort:protocol;80:8080:tcp'",
 						},
+						cli.StringFlag{
+							Name:  "params",
+							Usage: "params: --params 'param1:Value1;param2:Value2'",
+						},
 					},
 					ArgsUsage: "[-ports] [-channels] name source",
 					Action:    instanceAdd,
@@ -75,6 +79,67 @@ func main() {
 	}
 }
 
+
+func parseChannelsMapping(channelsMappingRaw string) (*map[string]string, error) {
+	channelsMapping := map[string]string{}
+
+	if channelsMappingRaw != "" {
+
+		for _, rawMap := range strings.Split(channelsMappingRaw, ";") {
+			splittedMap := strings.Split(rawMap, ":")
+
+			if len(splittedMap) != 2 {
+				return nil, fmt.Errorf("Wrong channels mapping: %v\n", rawMap)
+			}
+
+			cubeChannel := splittedMap[0]
+			handlerChannel := splittedMap[1]
+
+			channelsMapping[handlerChannel] = cubeChannel
+		}
+	}
+
+	return &channelsMapping, nil
+}
+
+func parsePortsMapping(portsMappingRaw string) (*[]instance.PortMap, error) {
+
+	var portsMapping []instance.PortMap
+	if portsMappingRaw != "" {
+
+		for _, rawMap := range strings.Split(portsMappingRaw, ";") {
+			splittedMap := strings.Split(rawMap, ":")
+
+			if len(splittedMap) != 3 {
+				return nil, fmt.Errorf("Wrong ports mapping: %v\n", rawMap)
+			}
+
+			hostPort, err := strconv.ParseUint(splittedMap[0], 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("Wrong host port format: %v/n", hostPort)
+			}
+
+			handlerPort, err := strconv.ParseUint(splittedMap[1], 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("Wrong cube port format: %v/n", handlerPort)
+			}
+
+			protocol := splittedMap[2]
+			if protocol != "udp" && protocol != "tcp" {
+				return nil, fmt.Errorf("Wrong port protocol: %v/n", protocol)
+			}
+
+			portsMapping = append(portsMapping, instance.PortMap{
+				HostPort: uint(hostPort),
+				CubePort: uint(handlerPort),
+				Protocol: protocol,
+			})
+		}
+	}
+
+	return &portsMapping, nil
+}
+
 func instanceAdd(c *cli.Context) error {
 	args := c.Args()
 
@@ -90,65 +155,23 @@ func instanceAdd(c *cli.Context) error {
 	}
 
 	channelsMappingRaw := c.String("channels")
-	channelsMapping := map[string]string{}
-
-	if channelsMappingRaw != "" {
-
-		for _, rawMap := range strings.Split(channelsMappingRaw, ";") {
-			splittedMap := strings.Split(rawMap, ":")
-
-			if len(splittedMap) != 2 {
-				return fmt.Errorf("Wrong channels mapping: %v\n", rawMap)
-			}
-
-			cubeChannel := splittedMap[0]
-			handlerChannel := splittedMap[1]
-
-			channelsMapping[handlerChannel] = cubeChannel
-		}
+	channelsMapping, err := parseChannelsMapping(channelsMappingRaw)
+	if err != nil {
+		return err
 	}
 
 	portsMappingRaw := c.String("ports")
-	portsMapping := []instance.PortMap{}
-
-	if channelsMappingRaw != "" {
-
-		for _, rawMap := range strings.Split(portsMappingRaw, ";") {
-			splittedMap := strings.Split(rawMap, ":")
-
-			if len(splittedMap) != 3 {
-				return fmt.Errorf("Wrong ports mapping: %v\n", rawMap)
-			}
-
-			hostPort, err := strconv.ParseUint(splittedMap[0], 10, 32)
-			if err != nil {
-				return fmt.Errorf("Wrong host port format: %v/n", hostPort)
-			}
-
-			handlerPort, err := strconv.ParseUint(splittedMap[1], 10, 32)
-			if err != nil {
-				return fmt.Errorf("Wrong cube port format: %v/n", handlerPort)
-			}
-
-			protocol := splittedMap[2]
-			if protocol != "udp" && protocol != "tcp" {
-				return fmt.Errorf("Wrong port protocol: %v/n", protocol)
-			}
-
-			portsMapping = append(portsMapping, instance.PortMap{
-				HostPort: uint(hostPort),
-				CubePort: uint(handlerPort),
-				Protocol: protocol,
-			})
-		}
+	portsMapping, err := parsePortsMapping(portsMappingRaw)
+	if err != nil {
+		return err
 	}
 
-	err := instance.Add(
+	err = instance.Add(
 		name,
 		source,
 		map[string]string{},
-		portsMapping,
-		channelsMapping,
+		*portsMapping,
+		*channelsMapping,
 	)
 
 	return err
