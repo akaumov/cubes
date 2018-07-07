@@ -207,3 +207,22 @@ func (c *CubesServer) Start() {
 		panic(err)
 	}
 }
+
+func InitProject(name string, description string) error {
+	return nil
+}
+
+func StartProject(name string) {
+}
+
+func ListInstances() error {
+	return nil
+}
+
+func Status() error {
+	return nil
+}
+
+func ProjectVersionLog() error {
+	return nil
+}
