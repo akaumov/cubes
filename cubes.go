@@ -4,13 +4,13 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	docker_client "github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"golang.org/x/net/context"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"github.com/docker/go-connections/nat"
 )
 
 const cubeCompilerImage = "azatk/cube-compiler:latest"
@@ -197,6 +197,9 @@ func (c *CubesServer) Start() {
 		log.Fatalf("Can't compile cube %v/n", err)
 		panic(err)
 	}
+
+	log.Println("Run cube instance")
+	pullImage(cubeInstanceImage)
 
 	err = runCubeInstance(filepath.Join(tempDir, "cube.tar"), "gateway")
 	if err != nil {

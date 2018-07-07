@@ -1,6 +1,8 @@
 package main
 
-import "cubes"
+import (
+	"cubes"
+)
 
 func main() {
 	server := cubes.NewCubesServer()
