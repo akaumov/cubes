@@ -12,7 +12,7 @@ echo "Current dir: $PWD"
 ls -l
 
 cd cube_executor
-sed -i "s|cube_executor/test_cube|$CUBE_PACKAGE|g" cube.go
+sed -i "s|github.com/akaumov/cube-stub|$CUBE_PACKAGE|g" cube.go
 
 echo "Current dir: $PWD"
 ls -l

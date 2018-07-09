@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"cubes/utils"
+	"github.com/akaumov/cube_executor"
 	docker_client "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"golang.org/x/net/context"
@@ -21,22 +22,6 @@ const Version = "1"
 const instancesDirectoryName = "instances"
 const cubeCompilerImage = "azatk/cube-compiler:latest"
 const cubeInstanceImage = "azatk/cube-instance:latest"
-
-type PortMap struct {
-	CubePort uint   `json:"cubePort"`
-	HostPort uint   `json:"hostPort"`
-	Protocol string `json:"protocol"`
-}
-
-type InstanceConfig struct {
-	SchemaVersion   string            `json:"schemaVersion"`
-	Version         string            `json:"version"`
-	Name            string            `json:"name"`
-	Source          string            `json:"source"`
-	Params          map[string]string `json:"params"`
-	PortsMapping    []PortMap         `json:"portsMapping"`
-	ChannelsMapping map[string]string `json:"channelsMapping"`
-}
 
 func getInstancesDirectoryPath() (string, error) {
 	pwd, err := os.Getwd()
@@ -58,7 +43,7 @@ func getInstanceConfigPath(name string) (string, error) {
 	return instanceConfigPath, nil
 }
 
-func Add(name string, source string, params map[string]string, portsMapping []PortMap, channelsMapping map[string]string) error {
+func Add(name string, source string, class string, queueGroup string, params map[string]string, portsMapping []cube_executor.PortMap, channelsMapping map[cube_executor.CubeChannel]cube_executor.BusChannel) error {
 	instancesDirectory, err := getInstancesDirectoryPath()
 	if err != nil {
 		return err
@@ -87,14 +72,17 @@ func Add(name string, source string, params map[string]string, portsMapping []Po
 		}
 	}
 
-	config, _ := json.MarshalIndent(InstanceConfig{
-		SchemaVersion:   Version,
-		Version:         "1",
-		Name:            name,
-		Source:          source,
-		Params:          params,
-		PortsMapping:    portsMapping,
-		ChannelsMapping: channelsMapping,
+	config, _ := json.MarshalIndent(cube_executor.CubeConfig{
+		SchemaVersion:     Version,
+		Version:           "1",
+		Name:              name,
+		Source:            source,
+		Class:             class,
+		QueueGroup:        queueGroup,
+		Params:            params,
+		PortsMapping:      portsMapping,
+		ChannelsMapping:   channelsMapping,
+		NumberOfListeners: 1,
 	}, "", "  ")
 
 	err = ioutil.WriteFile(instanceFile, config, 0777)
@@ -133,13 +121,13 @@ func GetConfigText(name string) (string, error) {
 	return string(instanceConfig), nil
 }
 
-func GetConfig(name string) (*InstanceConfig, error) {
+func GetConfig(name string) (*cube_executor.CubeConfig, error) {
 	rawConfig, err := GetConfigText(name)
 	if err != nil {
 		return nil, err
 	}
 
-	var config InstanceConfig
+	var config cube_executor.CubeConfig
 	err = json.Unmarshal(([]byte)(rawConfig), &config)
 
 	if err != nil {
@@ -234,7 +222,7 @@ func compileCube(cubePackage string, outputDir string) error {
 	return nil
 }
 
-func runCubeInstance(appPath string, config InstanceConfig, configPath string) error {
+func runCubeInstance(appPath string, config cube_executor.CubeConfig, configPath string) error {
 	ctx := context.Background()
 	client, err := docker_client.NewEnvClient()
 
@@ -253,7 +241,7 @@ func runCubeInstance(appPath string, config InstanceConfig, configPath string) e
 
 	for _, portData := range config.PortsMapping {
 
-		port, err := nat.NewPort(portData.Protocol, strconv.FormatUint(uint64(portData.CubePort), 10))
+		port, err := nat.NewPort(string(portData.Protocol), strconv.FormatUint(uint64(portData.CubePort), 10))
 		if err != nil {
 			return err
 		}
@@ -271,6 +259,13 @@ func runCubeInstance(appPath string, config InstanceConfig, configPath string) e
 		Image:        cubeInstanceImage,
 		Tty:          true,
 		ExposedPorts: exposedPorts,
+		Labels: map[string]string{
+			"_CUBE":             "true",
+			"_CUBE_CLASS":       config.Class,
+			"_CUBE_NAME":        config.Name,
+			"_CUBE_VERSION":     config.Version,
+			"_CUBE_QUEUE_GROUP": config.QueueGroup,
+		},
 	}, &container.HostConfig{
 		AutoRemove:   true,
 		Links:        []string{"cubes-bus:cubes-bus"},

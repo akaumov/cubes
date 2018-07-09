@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	cube_executor "github.com/akaumov/cube_executor"
 )
 
 func initProject(c *cli.Context) error {
@@ -45,7 +46,15 @@ func main() {
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "channels",
-							Usage: "channels mapping: --channels 'cubeChannel1:handlerChannel1;cubeChannel2:handlerChannel2'",
+							Usage: "channels mapping: --channels 'cubeChannel1:busChannel1;cubeChannel2:busChannel2'",
+						},
+						cli.StringFlag{
+							Name:  "queueGroup",
+							Usage: "queue group name",
+						},
+						cli.StringFlag{
+							Name:  "class",
+							Usage: "class name",
 						},
 						cli.StringFlag{
 							Name:  "ports",
@@ -94,8 +103,8 @@ func main() {
 	}
 }
 
-func parseChannelsMapping(channelsMappingRaw string) (*map[string]string, error) {
-	channelsMapping := map[string]string{}
+func parseChannelsMapping(channelsMappingRaw string) (*map[cube_executor.CubeChannel]cube_executor.BusChannel, error) {
+	channelsMapping := map[cube_executor.CubeChannel]cube_executor.BusChannel{}
 
 	if channelsMappingRaw != "" {
 
@@ -106,49 +115,59 @@ func parseChannelsMapping(channelsMappingRaw string) (*map[string]string, error)
 				return nil, fmt.Errorf("Wrong channels mapping: %v\n", rawMap)
 			}
 
-			cubeChannel := splittedMap[0]
-			handlerChannel := splittedMap[1]
+			cubeChannel := cube_executor.CubeChannel(splittedMap[0])
+			busChannel := cube_executor.BusChannel(splittedMap[1])
 
-			channelsMapping[handlerChannel] = cubeChannel
+			channelsMapping[cubeChannel] = busChannel
 		}
 	}
 
 	return &channelsMapping, nil
 }
 
-func parsePortsMapping(portsMappingRaw string) (*[]instance.PortMap, error) {
+func parsePortsMapping(portsMappingRaw string) (*[]cube_executor.PortMap, error) {
 
-	portsMapping := []instance.PortMap{}
+	portsMapping := []cube_executor.PortMap{}
 
 	if portsMappingRaw != "" {
 
 		for _, rawMap := range strings.Split(portsMappingRaw, ";") {
 			splittedMap := strings.Split(rawMap, ":")
 
-			if len(splittedMap) != 3 {
-				return nil, fmt.Errorf("Wrong ports mapping: %v\n", rawMap)
+			if len(splittedMap) < 2 || len(splittedMap) > 3 {
+				return nil, fmt.Errorf("wrong ports mapping: %v\n", rawMap)
 			}
 
 			hostPort, err := strconv.ParseUint(splittedMap[0], 10, 32)
 			if err != nil {
-				return nil, fmt.Errorf("Wrong host port format: %v/n", hostPort)
+				return nil, fmt.Errorf("wrong host port format: %v/n", hostPort)
 			}
 
 			handlerPort, err := strconv.ParseUint(splittedMap[1], 10, 32)
 			if err != nil {
-				return nil, fmt.Errorf("Wrong cube port format: %v/n", handlerPort)
+				return nil, fmt.Errorf("wrong cube port format: %v/n", handlerPort)
 			}
 
-			protocol := splittedMap[2]
-			if protocol != "udp" && protocol != "tcp" {
-				return nil, fmt.Errorf("Wrong port protocol: %v/n", protocol)
-			}
+			if len(splittedMap) == 2 {
+				portsMapping = append(portsMapping, cube_executor.PortMap{
+					HostPort: cube_executor.HostPort(hostPort),
+					CubePort: cube_executor.CubePort(handlerPort),
+					Protocol: cube_executor.Protocol("udp"),
+				})
 
-			portsMapping = append(portsMapping, instance.PortMap{
-				HostPort: uint(hostPort),
-				CubePort: uint(handlerPort),
-				Protocol: protocol,
-			})
+				portsMapping = append(portsMapping, cube_executor.PortMap{
+					HostPort: cube_executor.HostPort(hostPort),
+					CubePort: cube_executor.CubePort(handlerPort),
+					Protocol: cube_executor.Protocol("tcp"),
+				})
+
+			} else {
+				protocol := splittedMap[2]
+
+				if protocol != "udp" && protocol != "tcp" {
+					return nil, fmt.Errorf("wrong port protocol: %v/n", protocol)
+				}
+			}
 		}
 	}
 
@@ -192,6 +211,9 @@ func instanceAdd(c *cli.Context) error {
 		return fmt.Errorf("instance source is required")
 	}
 
+	queueGroup := c.String("queueGroup")
+	class := c.String("class")
+
 	channelsMappingRaw := c.String("channels")
 	channelsMapping, err := parseChannelsMapping(channelsMappingRaw)
 	if err != nil {
@@ -213,6 +235,8 @@ func instanceAdd(c *cli.Context) error {
 	err = instance.Add(
 		name,
 		source,
+		class,
+		queueGroup,
 		*params,
 		*portsMapping,
 		*channelsMapping,
