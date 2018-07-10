@@ -9,9 +9,18 @@ import (
 	"github.com/docker/go-connections/nat"
 	"golang.org/x/net/context"
 	"log"
+	"path/filepath"
+	"github.com/akaumov/cube_executor"
+	"strings"
+	"cubes/instance"
 )
 
 const busImage = "nats"
+
+type InstanceInfo struct {
+	Status string                   `json:"status"`
+	Config cube_executor.CubeConfig `json:"config"`
+}
 
 func StartBus() error {
 	log.Println("Running bus")
@@ -79,14 +88,42 @@ func InitProject(name string, description string) error {
 func StartProject(name string) {
 }
 
-func ListInstances() error {
-	return nil
-}
-
 func Status() error {
 	return nil
 }
 
 func ProjectVersionLog() error {
 	return nil
+}
+
+func GetListInstances() (*[]InstanceInfo, error) {
+
+	instancesDirectoryPath, err := instance.GetInstancesDirectoryPath()
+	if err != nil {
+		return nil, err
+	}
+
+	configsPathPattern := filepath.Join(instancesDirectoryPath, "*.json")
+	files, err := filepath.Glob(configsPathPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	result := []InstanceInfo{}
+
+	for _, configPath := range files {
+		_, fileName := filepath.Split(configPath)
+		instanceName := strings.TrimSuffix(fileName, ".json")
+
+		config, err := instance.GetConfig(instanceName)
+		if err != nil {
+			return nil, fmt.Errorf("can't read instance config %v/n", err)
+		}
+
+		result = append(result, InstanceInfo{
+			Config: *config,
+		})
+	}
+
+	return &result, err
 }

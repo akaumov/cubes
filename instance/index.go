@@ -9,21 +9,22 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-
 	"cubes/utils"
 	"github.com/akaumov/cube_executor"
 	docker_client "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"golang.org/x/net/context"
 	"strconv"
+	"strings"
 )
 
 const Version = "1"
 const instancesDirectoryName = "instances"
+
 const cubeCompilerImage = "azatk/cube-compiler:latest"
 const cubeInstanceImage = "azatk/cube-instance:latest"
 
-func getInstancesDirectoryPath() (string, error) {
+func GetInstancesDirectoryPath() (string, error) {
 	pwd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -34,7 +35,7 @@ func getInstancesDirectoryPath() (string, error) {
 }
 
 func getInstanceConfigPath(name string) (string, error) {
-	instancesDirectory, err := getInstancesDirectoryPath()
+	instancesDirectory, err := GetInstancesDirectoryPath()
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +45,7 @@ func getInstanceConfigPath(name string) (string, error) {
 }
 
 func Add(name string, source string, class string, queueGroup string, params map[string]string, portsMapping []cube_executor.PortMap, channelsMapping map[cube_executor.CubeChannel]cube_executor.BusChannel) error {
-	instancesDirectory, err := getInstancesDirectoryPath()
+	instancesDirectory, err := GetInstancesDirectoryPath()
 	if err != nil {
 		return err
 	}
@@ -137,6 +138,16 @@ func GetConfig(name string) (*cube_executor.CubeConfig, error) {
 	return &config, nil
 }
 
+func splitSource(source string) (string, string, error) {
+	if strings.HasPrefix(source, "go:") {
+		return "go", strings.TrimPrefix(source, "go"), nil
+	} else if strings.HasPrefix(source, "docker:") {
+		return "go", strings.TrimPrefix(source, "docker"), nil
+	}
+
+	return "", "", fmt.Errorf("wrong source format: %v\n", source)
+}
+
 func Start(name string) error {
 	instanceConfig, err := GetConfig(name)
 	if err != nil {
@@ -157,13 +168,24 @@ func Start(name string) error {
 
 	defer func() { os.RemoveAll(tempDir) }()
 
-	err = compileCube(instanceConfig.Source, tempDir)
+	sourceType, sourceData, err := splitSource(instanceConfig.Source)
 	if err != nil {
-		return fmt.Errorf("can't compile cube %v/n", err)
+		return err
+	}
+
+	imageToRun := cubeInstanceImage
+
+	if sourceType == "go" {
+		err = compileGoCube(sourceData, tempDir)
+		if err != nil {
+			return fmt.Errorf("can't compile cube %v/n", err)
+		}
+	} else if sourceType == "docker" {
+		imageToRun = sourceData
 	}
 
 	log.Println("Runing cube instance...")
-	err = utils.PullImage(cubeInstanceImage)
+	err = utils.PullImage(imageToRun)
 	if err != nil {
 		return fmt.Errorf("can't pull cube instance image: %v/n", err)
 	}
@@ -173,8 +195,7 @@ func Start(name string) error {
 
 	err = runCubeInstance(appPath, *instanceConfig, configPath)
 	if err != nil {
-		log.Fatalf("Can't run cube instance %v/n", err)
-		panic(err)
+		return fmt.Errorf("can't run cube instance %v/n", err)
 	}
 
 	return nil
@@ -188,7 +209,7 @@ func Ping(name string) error {
 	return nil
 }
 
-func compileCube(cubePackage string, outputDir string) error {
+func compileGoCube(cubePackage string, outputDir string) error {
 	ctx := context.Background()
 	client, err := docker_client.NewEnvClient()
 

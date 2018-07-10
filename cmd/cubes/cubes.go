@@ -9,7 +9,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	cube_executor "github.com/akaumov/cube_executor"
+	"encoding/json"
+	"github.com/akaumov/cube_executor"
 )
 
 func initProject(c *cli.Context) error {
@@ -24,6 +25,11 @@ func main() {
 			Name:   "init",
 			Usage:  "init project",
 			Action: initProject,
+		},
+		{
+			Name:   "list",
+			Usage:  "list all instances",
+			Action: list,
 		},
 		{
 			Name:  "bus",
@@ -279,6 +285,22 @@ func instanceStart(c *cli.Context) error {
 	}
 
 	return instance.Start(name)
+}
+
+func list(c *cli.Context) error {
+
+	info, err := global.GetListInstances()
+	if err != nil {
+		return err
+	}
+
+	infoText, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(infoText))
+	return nil
 }
 
 func startBus(c *cli.Context) error {
