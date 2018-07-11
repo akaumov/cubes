@@ -1,19 +1,19 @@
 package instance
 
 import (
-	"encoding/json"
-	"fmt"
+	"github.com/akaumov/cube_executor"
+	"github.com/akaumov/cubes/utils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"io/ioutil"
-	"log"
-	"os"
-	"path/filepath"
-	"cubes/utils"
-	"github.com/akaumov/cube_executor"
 	docker_client "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"golang.org/x/net/context"
+	"encoding/json"
+	"io/ioutil"
+	"path/filepath"
+	"os"
+	"log"
+	"fmt"
 	"strconv"
 	"strings"
 )

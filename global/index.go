@@ -1,18 +1,18 @@
 package global
 
 import (
-	"cubes/utils"
-	"fmt"
+	"github.com/akaumov/cubes/utils"
+	"github.com/akaumov/cubes/instance"
+	"github.com/akaumov/cube_executor"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	docker_client "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"golang.org/x/net/context"
+	"fmt"
 	"log"
 	"path/filepath"
-	"github.com/akaumov/cube_executor"
 	"strings"
-	"cubes/instance"
 )
 
 const busImage = "nats"

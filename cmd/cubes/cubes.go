@@ -1,8 +1,9 @@
 package main
 
 import (
-	"cubes/global"
-	"cubes/instance"
+	"github.com/akaumov/cubes/global"
+	"github.com/akaumov/cubes/instance"
+	"github.com/akaumov/cube_executor"
 	"fmt"
 	"github.com/urfave/cli"
 	"log"
@@ -10,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"encoding/json"
-	"github.com/akaumov/cube_executor"
 )
 
 func initProject(c *cli.Context) error {
@@ -21,7 +21,6 @@ func main() {
 	app := cli.NewApp()
 	app.Commands = []cli.Command{
 		{
-
 			Name:   "init",
 			Usage:  "init project",
 			Action: initProject,
