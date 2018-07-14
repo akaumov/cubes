@@ -117,8 +117,8 @@ func main() {
 					Action: addMigration,
 				},
 				{
-					Name:  "list",
-					Usage: "return migrations",
+					Name:   "list",
+					Usage:  "return migrations",
 					Action: listMigrations,
 				},
 				{
@@ -142,25 +142,30 @@ func main() {
 					Usage: "operations with columns of tables",
 					Subcommands: []cli.Command{
 						{
-							Name:   "add",
-							Usage:  "add table columName columnType [length]",
+							Name:  "add",
+							Usage: "add tableName columName columnType",
 							Flags: []cli.Flag{
 								cli.BoolTFlag{
-									Name: "nullable",
+									Name:  "nullable",
 									Usage: "isNullable flag, default true",
 								},
 								cli.StringFlag{
-									Name: "default",
+									Name:  "default",
 									Usage: "default value",
 								},
 							},
 							Action: addColumn,
 						},
+						{
+							Name:   "delete",
+							Usage:  "delete tableName columName",
+							Action: deleteColumn,
+						},
 					},
 				},
 				{
-					Name:  "sync",
-					Usage: "sync migrations",
+					Name:   "sync",
+					Usage:  "sync migrations",
 					Action: syncMigrations,
 				},
 			},
@@ -410,8 +415,6 @@ func deleteTable(c *cli.Context) error {
 	return nil
 }
 
-
-
 func addColumn(c *cli.Context) error {
 	args := c.Args()
 
@@ -442,6 +445,28 @@ func addColumn(c *cli.Context) error {
 	return nil
 }
 
+func deleteColumn(c *cli.Context) error {
+	args := c.Args()
+
+	tableName := args.Get(0)
+	if tableName == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	columnName := args.Get(1)
+	if columnName == "" {
+		return fmt.Errorf("column name is required")
+	}
+
+	updatedMigrationId, err := db.DeleteColumn(tableName, columnName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
 func listMigrations(c *cli.Context) error {
 	migrations, err := db.GetList()
 	if err != nil {
@@ -455,5 +480,5 @@ func listMigrations(c *cli.Context) error {
 }
 
 func syncMigrations(c *cli.Context) error {
-	return  db.Sync()
+	return db.Sync()
 }

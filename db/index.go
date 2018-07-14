@@ -33,6 +33,7 @@ type AddColumnParams struct {
 }
 
 type DeleteColumnParams struct {
+	Table  string `json:"table"`
 	Column string `json:"column"`
 }
 
@@ -247,6 +248,23 @@ func AddColumn(tableName string, columnName string, columnType string, isNullabl
 	return addActionToMigrationFile("addColumn", params)
 }
 
+func DeleteColumn(tableName string, columnName string) (string, error) {
+	if strings.TrimSpace(tableName) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	if strings.TrimSpace(columnName) == "" {
+		return "", fmt.Errorf("column name is required /n")
+	}
+
+	params := DeleteColumnParams{
+		Table:        tableName,
+		Column:       columnName,
+	}
+
+	return addActionToMigrationFile("deleteColumn", params)
+}
+
 func Sync() error {
 	migrations, err := GetList()
 	if err != nil {
@@ -349,6 +367,9 @@ func applyMigrationActions(transaction *sql.Tx, migration Migration) error {
 			break
 		case "addColumn":
 			err = applyAddColumn(transaction, params.(AddColumnParams))
+			break
+		case "deleteColumn":
+			err = applyDeleteColumn(transaction, params.(DeleteColumnParams))
 			break
 		}
 
@@ -462,6 +483,20 @@ func applyAddColumn(transaction *sql.Tx, params AddColumnParams) error {
 	_, err := transaction.Exec(query)
 	if err != nil {
 		return fmt.Errorf("can't add column '%v' to table '%v': %v/n", params.Column, params.Table, err)
+	}
+
+	return nil
+}
+
+func applyDeleteColumn(transaction *sql.Tx, params DeleteColumnParams) error {
+	query := fmt.Sprintf(`
+		ALTER TABLE "%v"
+			DROP COLUMN "%v"
+	`, params.Table, params.Column)
+
+	_, err := transaction.Exec(query)
+	if err != nil {
+		return fmt.Errorf("can't delete column '%v' at table '%v': %v/n", params.Column, params.Table, err)
 	}
 
 	return nil
