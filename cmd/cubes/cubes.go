@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"encoding/json"
+	"github.com/akaumov/cubes/db"
 )
 
 func initProject(c *cli.Context) error {
@@ -97,6 +98,44 @@ func main() {
 						log.Println("stop instance")
 						return nil
 					},
+				},
+			},
+		},
+		{
+			Name:  "migration",
+			Usage: "manage migrations",
+			Subcommands: []cli.Command{
+				{
+					Name:  "add",
+					Usage: "add migrationDescription",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "description",
+							Usage: "description text: --descrtiption 'description text'",
+						},
+					},
+					Action: addMigration,
+				},
+				{
+					Name:  "list",
+					Usage: "return migrations",
+					Action: listMigrations,
+				},
+				{
+					Name:  "table",
+					Usage: "operations with tables",
+					Subcommands: []cli.Command{
+						{
+							Name:   "add",
+							Usage:  "add tableName",
+							Action: addTable,
+						},
+					},
+				},
+				{
+					Name:  "sync",
+					Usage: "sync migrations",
+					Action: syncMigrations,
 				},
 			},
 		},
@@ -304,4 +343,42 @@ func list(c *cli.Context) error {
 
 func startBus(c *cli.Context) error {
 	return global.StartBus()
+}
+
+func addMigration(c *cli.Context) error {
+	description := c.String("description")
+	return db.AddMigration(description)
+}
+
+func addTable(c *cli.Context) error {
+	args := c.Args()
+	tableName := args.Get(0)
+
+	if tableName == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	updatedMigrationId, err := db.AddTable(tableName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
+func listMigrations(c *cli.Context) error {
+	migrations, err := db.GetList()
+	if err != nil {
+		return err
+	}
+
+	packedMigrations, _ := json.MarshalIndent(migrations, "", "  ")
+
+	fmt.Println(string(packedMigrations))
+	return nil
+}
+
+func syncMigrations(c *cli.Context) error {
+	return  db.Sync()
 }

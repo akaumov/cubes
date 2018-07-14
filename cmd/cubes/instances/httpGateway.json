@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "version": "1",
+  "name": "httpGateway",
+  "class": "",
+  "source": "go:github.com/akaumov/cube-http-gateway",
+  "params": {},
+  "queueGroup": "",
+  "portsMapping": [
+    {
+      "cubePort": 80,
+      "hostPort": 80,
+      "protocol": "udp"
+    },
+    {
+      "cubePort": 80,
+      "hostPort": 80,
+      "protocol": "tcp"
+    }
+  ],
+  "channelsMapping": {},
+  "numberOfListeners": 1
+}
