@@ -130,6 +130,32 @@ func main() {
 							Usage:  "add tableName",
 							Action: addTable,
 						},
+						{
+							Name:   "delete",
+							Usage:  "delete tableName",
+							Action: deleteTable,
+						},
+					},
+				},
+				{
+					Name:  "column",
+					Usage: "operations with columns of tables",
+					Subcommands: []cli.Command{
+						{
+							Name:   "add",
+							Usage:  "add table columName columnType [length]",
+							Flags: []cli.Flag{
+								cli.BoolTFlag{
+									Name: "nullable",
+									Usage: "isNullable flag, default true",
+								},
+								cli.StringFlag{
+									Name: "default",
+									Usage: "default value",
+								},
+							},
+							Action: addColumn,
+						},
 					},
 				},
 				{
@@ -359,6 +385,55 @@ func addTable(c *cli.Context) error {
 	}
 
 	updatedMigrationId, err := db.AddTable(tableName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
+func deleteTable(c *cli.Context) error {
+	args := c.Args()
+	tableName := args.Get(0)
+
+	if tableName == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	updatedMigrationId, err := db.DeleteTable(tableName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
+
+
+func addColumn(c *cli.Context) error {
+	args := c.Args()
+
+	tableName := args.Get(0)
+	if tableName == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	columnName := args.Get(1)
+	if columnName == "" {
+		return fmt.Errorf("column name is required")
+	}
+
+	columnType := args.Get(2)
+	if columnType == "" {
+		return fmt.Errorf("column type is required")
+	}
+
+	isNullable := c.BoolT("nullable")
+	defaultValue := c.String("default")
+
+	updatedMigrationId, err := db.AddColumn(tableName, columnName, columnType, isNullable, defaultValue)
 	if err != nil {
 		return err
 	}

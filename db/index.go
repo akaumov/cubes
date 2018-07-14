@@ -25,11 +25,11 @@ type DeleteTableParams struct {
 }
 
 type AddColumnParams struct {
-	Table      string `json:"table"`
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	Length     string `json:"length"`
-	IsNullable string `json:"isNullable"`
+	Table        string `json:"table"`
+	Column       string `json:"column"`
+	Type         string `json:"type"`
+	IsNullable   bool   `json:"isNullable"`
+	DefaultValue string `json:"defaultValue"`
 }
 
 type DeleteColumnParams struct {
@@ -169,11 +169,7 @@ func GetList() (*[]Migration, error) {
 	return &result, err
 }
 
-func AddTable(name string) (string, error) {
-
-	if strings.TrimSpace(name) == "" {
-		return "", fmt.Errorf("table name is required /n")
-	}
+func addActionToMigrationFile(method string, params interface{}) (string, error) {
 
 	migrations, err := GetList()
 	if err != nil {
@@ -185,15 +181,11 @@ func AddTable(name string) (string, error) {
 		return "", fmt.Errorf("migration doesn't exist, please add migration/n")
 	}
 
-	params := AddTableParams{
-		Name: name,
-	}
-
 	packedParams, _ := json.MarshalIndent(params, "", "  ")
 
 	lastMigration := (*migrations)[migrationsSize-1]
 	lastMigration.Actions = append(lastMigration.Actions, Action{
-		Method: "addTable",
+		Method: method,
 		Params: (json.RawMessage)(packedParams),
 	})
 
@@ -205,6 +197,54 @@ func AddTable(name string) (string, error) {
 	}
 
 	return lastMigration.Id, nil
+}
+
+func AddTable(tableName string) (string, error) {
+	if strings.TrimSpace(tableName) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	params := AddTableParams{
+		Name: tableName,
+	}
+
+	return addActionToMigrationFile("addTable", params)
+}
+
+func DeleteTable(tableName string) (string, error) {
+	if strings.TrimSpace(tableName) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	params := DeleteTableParams{
+		Name: tableName,
+	}
+
+	return addActionToMigrationFile("deleteTable", params)
+}
+
+func AddColumn(tableName string, columnName string, columnType string, isNullable bool, defaultValue string) (string, error) {
+	if strings.TrimSpace(tableName) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	if strings.TrimSpace(columnName) == "" {
+		return "", fmt.Errorf("column name is required /n")
+	}
+
+	if strings.TrimSpace(columnType) == "" {
+		return "", fmt.Errorf("column type is required /n")
+	}
+
+	params := AddColumnParams{
+		Table:        tableName,
+		Column:       columnName,
+		IsNullable:   isNullable,
+		Type:         columnType,
+		DefaultValue: defaultValue,
+	}
+
+	return addActionToMigrationFile("addColumn", params)
 }
 
 func Sync() error {
@@ -306,10 +346,14 @@ func applyMigrationActions(transaction *sql.Tx, migration Migration) error {
 			break
 		case "deleteTable":
 			err = applyDeleteTable(transaction, params.(DeleteTableParams))
+			break
+		case "addColumn":
+			err = applyAddColumn(transaction, params.(AddColumnParams))
+			break
 		}
 
 		if err != nil {
-			return fmt.Errorf("can't apply action %v: %v/n", action, err)
+			return fmt.Errorf("can't apply action %v: %v/n", params, err)
 		}
 	}
 
@@ -388,10 +432,36 @@ func applyAddTable(transaction *sql.Tx, params AddTableParams) error {
 }
 
 func applyDeleteTable(transaction *sql.Tx, params DeleteTableParams) error {
-	query := fmt.Sprintf("DROP TABLE \"%v\" ();", params.Name)
+	query := fmt.Sprintf("DROP TABLE \"%v\"", params.Name)
 	_, err := transaction.Exec(query)
 	if err != nil {
 		return fmt.Errorf("can't delete table %v: %v/n", params.Name, err)
+	}
+
+	return nil
+}
+
+func applyAddColumn(transaction *sql.Tx, params AddColumnParams) error {
+	columnType := params.Type
+	notNullParam := ""
+	if !params.IsNullable {
+		notNullParam = "NOT NULL"
+	}
+
+	defaultValueParam := ""
+	if params.DefaultValue != "" {
+		defaultValueParam = fmt.Sprintf("DEFAULT '%v';", params.DefaultValue)
+	}
+
+	query := fmt.Sprintf(`
+		ALTER TABLE "%v"
+			ADD COLUMN "%v" %v %v %v
+	`, params.Table, params.Column, columnType, notNullParam, defaultValueParam)
+
+	fmt.Println(query)
+	_, err := transaction.Exec(query)
+	if err != nil {
+		return fmt.Errorf("can't add column '%v' to table '%v': %v/n", params.Column, params.Table, err)
 	}
 
 	return nil
