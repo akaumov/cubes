@@ -1,17 +1,18 @@
 package db
 
 import (
-	"encoding/json"
-	"time"
-	"io/ioutil"
-	"path/filepath"
-	"os"
-	"fmt"
-	"strings"
-	"sort"
 	"database/sql"
-	_ "github.com/lib/pq"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	_ "github.com/lib/pq"
 )
 
 const migrationsDirectoryName = "migrations"
@@ -52,6 +53,25 @@ type Migration struct {
 	Id            string   `json:"id"`
 	Description   string   `json:"description"`
 	Actions       []Action `json:"actions"`
+}
+
+type Column struct {
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	IsNullable   bool   `json:"isNullable"`
+	DefaultValue string `json:"defaultValue"`
+}
+
+type ColumnName string
+
+type Table struct {
+	Name        string   `json:"name"`
+	Columns     []Column `json:"columns"`
+	PrimaryKeys []ColumnName
+}
+
+type Snapshot struct {
+	Tables []Table `json:"tables"`
 }
 
 func GetMigrationsDirectoryPath() (string, error) {
@@ -258,8 +278,8 @@ func DeleteColumn(tableName string, columnName string) (string, error) {
 	}
 
 	params := DeleteColumnParams{
-		Table:        tableName,
-		Column:       columnName,
+		Table:  tableName,
+		Column: columnName,
 	}
 
 	return addActionToMigrationFile("deleteColumn", params)
@@ -499,5 +519,159 @@ func applyDeleteColumn(transaction *sql.Tx, params DeleteColumnParams) error {
 		return fmt.Errorf("can't delete column '%v' at table '%v': %v/n", params.Column, params.Table, err)
 	}
 
+	return nil
+}
+
+func GetSnapshot() (*Snapshot, error) {
+	migrations, err := GetList()
+	if err != nil {
+		return nil, fmt.Errorf("can't read migrations: %v", err)
+	}
+
+	snapshot := Snapshot{
+		Tables: []Table{},
+	}
+	for _, migration := range *migrations {
+
+		err = applyMigrationToSnapshot(&snapshot, migration)
+		if err != nil {
+			return nil, fmt.Errorf("can't apply migration %v to snapshot: %v/n", migration.Id, err)
+		}
+	}
+
+	return &snapshot, nil
+}
+
+func applyMigrationToSnapshot(snapshot *Snapshot, migration Migration) error {
+	for _, action := range migration.Actions {
+		method, params, err := decodeAction(action.Method, action.Params)
+		if err != nil {
+			return fmt.Errorf("can't decode action %v/n", err)
+		}
+
+		switch method {
+		case "addTable":
+			err = applyAddTableToSnapshot(snapshot, params.(AddTableParams))
+			break
+		case "deleteTable":
+			err = applyDeleteTableFromSnapshot(snapshot, params.(DeleteTableParams))
+			break
+		case "addColumn":
+			err = applyAddColumnToSnapshot(snapshot, params.(AddColumnParams))
+			break
+		case "deleteColumn":
+			err = applyDeleteColumnFromSnapshot(snapshot, params.(DeleteColumnParams))
+			break
+		}
+
+		if err != nil {
+			return fmt.Errorf("can't apply action %v: %v/n", params, err)
+		}
+	}
+
+	return nil
+}
+
+func getTableFromSnapshot(snapshot *Snapshot, tableName string) *Table {
+
+	tables := snapshot.Tables
+
+	for index := 0; index < len(tables); index++ {
+		table := &(tables[index])
+		if table.Name == tableName {
+			return table
+		}
+	}
+
+	return nil
+}
+
+func applyAddTableToSnapshot(snapshot *Snapshot, params AddTableParams) error {
+	existingTable := getTableFromSnapshot(snapshot, params.Name)
+	if existingTable != nil {
+		return fmt.Errorf("table already exist")
+	}
+
+	snapshot.Tables = append(snapshot.Tables, Table{
+		Name:        params.Name,
+		Columns:     []Column{},
+		PrimaryKeys: []ColumnName{},
+	})
+
+	return nil
+}
+
+func applyDeleteTableFromSnapshot(snapshot *Snapshot, params DeleteTableParams) error {
+	tableName := params.Name
+	existingTable := getTableFromSnapshot(snapshot, tableName)
+	if existingTable == nil {
+		return fmt.Errorf("table doesn't exist")
+	}
+
+	for index, table := range snapshot.Tables {
+		if table.Name != tableName {
+			continue
+		}
+
+		snapshot.Tables = append(snapshot.Tables[:index], snapshot.Tables[index+1:]...)
+	}
+	return nil
+}
+
+func getColumnFromTable(table *Table, columnName string) *Column {
+
+	columns := table.Columns
+
+	for index := 0; index < len(columns); index++ {
+		column := columns[index]
+
+		if column.Name == columnName {
+			return &column
+		}
+	}
+
+	return nil
+}
+
+func applyAddColumnToSnapshot(snapshot *Snapshot, params AddColumnParams) error {
+	table := getTableFromSnapshot(snapshot, params.Table)
+	if table == nil {
+		return fmt.Errorf("table doesn't exist")
+	}
+
+	column := getColumnFromTable(table, params.Column)
+	if column != nil {
+		return fmt.Errorf("column already exist")
+	}
+
+	table.Columns = append(table.Columns, Column{
+		Name:         params.Column,
+		Type:         params.Type,
+		IsNullable:   params.IsNullable,
+		DefaultValue: params.DefaultValue,
+	})
+
+	return nil
+}
+
+func applyDeleteColumnFromSnapshot(snapshot *Snapshot, params DeleteColumnParams) error {
+	table := getTableFromSnapshot(snapshot, params.Table)
+	if table == nil {
+		return fmt.Errorf("table doesn't exist")
+	}
+
+	columnName := params.Column
+	column := getColumnFromTable(table, columnName)
+	if column == nil {
+		return fmt.Errorf("column doesn't exist")
+	}
+
+	for index, column := range table.Columns {
+		if column.Name != columnName {
+			continue
+		}
+
+		table.Columns = append(table.Columns[:index], table.Columns[index+1:]...)
+	}
 	return nil
 }

@@ -1,17 +1,18 @@
 package main
 
 import (
-	"github.com/akaumov/cubes/global"
-	"github.com/akaumov/cubes/instance"
-	"github.com/akaumov/cube_executor"
+	"encoding/json"
 	"fmt"
-	"github.com/urfave/cli"
 	"log"
 	"os"
 	"strconv"
 	"strings"
-	"encoding/json"
+
+	"github.com/akaumov/cube_executor"
 	"github.com/akaumov/cubes/db"
+	"github.com/akaumov/cubes/global"
+	"github.com/akaumov/cubes/instance"
+	"github.com/urfave/cli"
 )
 
 func initProject(c *cli.Context) error {
@@ -120,6 +121,11 @@ func main() {
 					Name:   "list",
 					Usage:  "return migrations",
 					Action: listMigrations,
+				},
+				{
+					Name:   "snapshot",
+					Usage:  "return snapshot",
+					Action: migrationSnapshot,
 				},
 				{
 					Name:  "table",
@@ -476,6 +482,17 @@ func listMigrations(c *cli.Context) error {
 	packedMigrations, _ := json.MarshalIndent(migrations, "", "  ")
 
 	fmt.Println(string(packedMigrations))
+	return nil
+}
+
+func migrationSnapshot(c *cli.Context) error {
+	snapshot, err := db.GetSnapshot()
+	if err != nil {
+		return err
+	}
+
+	textSnapshot, _ := json.MarshalIndent(*snapshot, "", "  ")
+	log.Println(string(textSnapshot))
 	return nil
 }
 
