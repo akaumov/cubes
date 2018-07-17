@@ -303,18 +303,18 @@ func applyDeletePrimaryKeyFromSnapshot(snapshot *Snapshot, params DeletePrimaryK
 		return fmt.Errorf("column '%v' doesn't exist", params.Column)
 	}
 
-	isPrimaryKeyExist := false
+	keyIndex := -1
 
-	for _, columnName := range table.PrimaryKeys {
+	for index, columnName := range table.PrimaryKeys {
 		if columnName == ColumnName(params.Column) {
-			isPrimaryKeyExist = true
+			keyIndex = index
 		}
 	}
 
-	if !isPrimaryKeyExist {
+	if keyIndex == -1 {
 		return fmt.Errorf("primary key for column '%v' doesn't exist", params.Column)
 	}
 
-	table.PrimaryKeys = append(table.PrimaryKeys, ColumnName(params.Column))
+	table.PrimaryKeys = append(table.PrimaryKeys[:keyIndex], table.PrimaryKeys[keyIndex+1:]...)
 	return nil
 }
