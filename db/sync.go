@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 )
 
@@ -17,7 +18,7 @@ func applyAddTable(transaction *sql.Tx, params AddTableParams) error {
 	query := fmt.Sprintf("CREATE TABLE \"%v\" ();", params.Name)
 	_, err := transaction.Exec(query)
 	if err != nil {
-		return fmt.Errorf("can't create table %v: %v/n", params.Name, err)
+		return fmt.Errorf("can't create table %v: %v\n", params.Name, err)
 	}
 
 	return nil
@@ -33,7 +34,7 @@ func applyDeleteTable(transaction *sql.Tx, params DeleteTableParams) error {
 	_, err := transaction.Exec(query)
 
 	if err != nil {
-		return fmt.Errorf("can't delete table %v: %v/n", params.Name, err)
+		return fmt.Errorf("can't delete table %v: %v\n", params.Name, err)
 	}
 
 	return nil
@@ -67,7 +68,7 @@ func applyAddColumn(transaction *sql.Tx, params AddColumnParams) error {
 
 	_, err := transaction.Exec(query)
 	if err != nil {
-		return fmt.Errorf("can't add column '%v' to table '%v': %v/n", params.Column, params.Table, err)
+		return fmt.Errorf("can't add column '%v' to table '%v': %v\n", params.Column, params.Table, err)
 	}
 
 	return nil
@@ -82,7 +83,7 @@ func applyDeleteColumn(transaction *sql.Tx, params DeleteColumnParams) error {
 
 	_, err := transaction.Exec(query)
 	if err != nil {
-		return fmt.Errorf("can't delete column '%v' at table '%v': %v/n", params.Column, params.Table, err)
+		return fmt.Errorf("can't delete column '%v' at table '%v': %v\n", params.Column, params.Table, err)
 	}
 
 	return nil
@@ -90,7 +91,7 @@ func applyDeleteColumn(transaction *sql.Tx, params DeleteColumnParams) error {
 
 func applyAddPrimaryKey(transaction *sql.Tx, migrationId string, actionIndex int, params AddPrimaryKeyParams) error {
 
-	snapshot, err := GetSnapshotWithAction(migrationId, actionIndex)
+	snapshot, err := GetSnapshotForVersion(migrationId, actionIndex)
 	if err != nil {
 		return err
 	}
@@ -105,11 +106,13 @@ func applyAddPrimaryKey(transaction *sql.Tx, migrationId string, actionIndex int
 		return fmt.Errorf("column '%v' doesn't exist", params.Column)
 	}
 
+	constraintName := params.Table + "_pkey"
+
 	if len(table.PrimaryKeys) > 1 {
 		query := fmt.Sprintf(`
 			ALTER TABLE "%v"
-				DROP CONSTRAINT pkey
-		`, params.Table)
+				DROP CONSTRAINT "%v"
+		`, params.Table, constraintName)
 
 		_, err := transaction.Exec(query)
 		if err != nil {
@@ -129,12 +132,12 @@ func applyAddPrimaryKey(transaction *sql.Tx, migrationId string, actionIndex int
 
 	query := fmt.Sprintf(`
 		ALTER TABLE "%v"
-			ADD CONSTRAINT pkey PRIMARY KEY (%v);
-	`, params.Table, keys)
+			ADD CONSTRAINT "%v" PRIMARY KEY (%v);
+	`, params.Table, constraintName, keys)
 
 	_, err = transaction.Exec(query)
 	if err != nil {
-		return fmt.Errorf("can't add primary key '%v' to table '%v': %v/n", params.Column, params.Table, err)
+		return fmt.Errorf("can't add primary key '%v' to table '%v': %v\n", params.Column, params.Table, err)
 	}
 
 	return nil
@@ -142,7 +145,9 @@ func applyAddPrimaryKey(transaction *sql.Tx, migrationId string, actionIndex int
 
 func applyDeletePrimaryKey(transaction *sql.Tx, migrationId string, actionIndex int, params DeletePrimaryKeyParams) error {
 
-	snapshot, err := GetSnapshotWithAction(migrationId, actionIndex)
+	constraintName := params.Table + "_pkey"
+
+	snapshot, err := GetSnapshotForVersion(migrationId, actionIndex)
 	if err != nil {
 		return err
 	}
@@ -154,8 +159,8 @@ func applyDeletePrimaryKey(transaction *sql.Tx, migrationId string, actionIndex 
 
 	query := fmt.Sprintf(`
 			ALTER TABLE "%v"
-				DROP CONSTRAINT pkey
-		`, params.Table)
+				DROP CONSTRAINT "%v"
+		`, params.Table, constraintName)
 
 	_, err = transaction.Exec(query)
 	if err != nil {
@@ -183,16 +188,63 @@ func applyDeletePrimaryKey(transaction *sql.Tx, migrationId string, actionIndex 
 
 	_, err = transaction.Exec(query)
 	if err != nil {
-		return fmt.Errorf("can't add primary key '%v' to table '%v': %v/n", params.Column, params.Table, err)
+		return fmt.Errorf("can't add primary key '%v' to table '%v': %v\n", params.Column, params.Table, err)
+	}
+
+	return nil
+}
+
+func applyAddRelation(transaction *sql.Tx, params AddRelationParams) error {
+
+	columns := ""
+	remoteColumns := ""
+
+	for _, mapping := range params.ColumnsMapping {
+		if columns == "" {
+			columns = fmt.Sprintf(`"%v"`, mapping.Column)
+			remoteColumns = fmt.Sprintf(`"%v"`, mapping.RemoteColumn)
+		} else {
+			columns += fmt.Sprintf(`, "%v"`, mapping.Column)
+			remoteColumns += fmt.Sprintf(`, "%v"`, mapping.RemoteColumn)
+		}
+	}
+
+	query := fmt.Sprintf(`
+		ALTER TABLE "%v"
+			ADD CONSTRAINT "%v" FOREIGN KEY (%v)
+			REFERENCES "%v" (%v) MATCH SIMPLE
+			ON UPDATE NO ACTION
+			ON DELETE NO ACTION;
+	`, params.Table, params.Name, columns, params.RemoteTable, remoteColumns)
+
+	_, err := transaction.Exec(query)
+	if err != nil {
+		return fmt.Errorf("can't add relation '%v' to table '%v': %v\n", params.Name, params.Table, err)
+	}
+
+	return nil
+}
+
+func applyDeleteRelation(transaction *sql.Tx, params DeleteRelationParams) error {
+
+	query := fmt.Sprintf(`
+		ALTER TABLE "%v"
+			DROP CONSTRAINT "%v"
+	`, params.Table, params.Name)
+
+	_, err := transaction.Exec(query)
+	if err != nil {
+		return fmt.Errorf("can't delete relation '%v' to table '%v': %v\n", params.Name, params.Table, err)
 	}
 
 	return nil
 }
 
 func Sync() error {
+
 	migrations, err := GetList()
 	if err != nil {
-		return fmt.Errorf("can't read migrations: %v/n", err)
+		return fmt.Errorf("can't read migrations: %v\n", err)
 	}
 
 	dbConnectionString := fmt.Sprintf("user=%v password=%v dbname=%v host=%v port=%v sslmode=disable",
@@ -253,13 +305,13 @@ func Sync() error {
 		err = applyMigrationActions(transaction, migration)
 		if err != nil {
 			transaction.Rollback()
-			return fmt.Errorf("can't apply migration %v: %v/n", migration.Id, err)
+			return fmt.Errorf("can't apply migration %v: %v\n", migration.Id, err)
 		}
 
 		addMigrationToMigrationsTable(transaction, migration)
 		if err != nil {
 			transaction.Rollback()
-			return fmt.Errorf("can't add migration to migrations table %v: %v/n", migration.Id, err)
+			return fmt.Errorf("can't add migration to migrations table %v: %v\n", migration.Id, err)
 		}
 	}
 
@@ -281,12 +333,15 @@ func getCurrentSyncedMigrationId(transaction *sql.Tx) (string, error) {
 
 func applyMigrationActions(transaction *sql.Tx, migration Migration) error {
 
+	fmt.Println(migration.Id)
+
 	for index, action := range migration.Actions {
+
 		var err error
 
 		method, params, err := decodeAction(action.Method, action.Params)
 		if err != nil {
-			return fmt.Errorf("can't decode action %v/n", err)
+			return fmt.Errorf("can't decode action %v\n", err)
 		}
 
 		switch method {
@@ -308,12 +363,23 @@ func applyMigrationActions(transaction *sql.Tx, migration Migration) error {
 		case "deletePrimaryKey":
 			err = applyDeletePrimaryKey(transaction, migration.Id, index, params.(DeletePrimaryKeyParams))
 			break
+		case "addRelation":
+			err = applyAddRelation(transaction, params.(AddRelationParams))
+			break
+		case "deleteRelation":
+			err = applyDeleteRelation(transaction, params.(DeleteRelationParams))
+			break
 		}
 
 		if err != nil {
-			return fmt.Errorf("can't apply action %v %v: %v/n", method, params, err)
+			fmt.Println("#"+strconv.Itoa(index), method, "error")
+			return fmt.Errorf("can't apply action #%v=\"%v\": %v\n", index, method, err)
+		} else {
+			fmt.Println("#"+strconv.Itoa(index), method, "success", "")
 		}
 	}
+
+	fmt.Println()
 
 	return nil
 }
@@ -375,6 +441,24 @@ func decodeAction(method string, params json.RawMessage) (string, interface{}, e
 		}
 
 		return method, deletePrimaryKeyParams, nil
+
+	case "addRelation":
+		var addRelationParams AddRelationParams
+		err = json.Unmarshal(params, &addRelationParams)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return method, addRelationParams, nil
+
+	case "deleteRelation":
+		var deleteRelationParams DeleteRelationParams
+		err = json.Unmarshal(params, &deleteRelationParams)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return method, deleteRelationParams, nil
 	}
 
 	return "", nil, nil

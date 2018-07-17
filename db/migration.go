@@ -53,6 +53,31 @@ type RenameColumnParams struct {
 	NewName string `json:"newName"`
 }
 
+type RelationType string
+
+const (
+	Object = RelationType("object")
+	Array  = RelationType("array")
+)
+
+type ColumnsMap struct {
+	Column       string `json:"column"`
+	RemoteColumn string `json:"remoteColumn"`
+}
+
+type AddRelationParams struct {
+	Type           RelationType `json:"type"`
+	Name           string       `json:"name"`
+	Table          string       `json:"table"`
+	RemoteTable    string       `json:"remoteTable"`
+	ColumnsMapping []ColumnsMap `json:"columnsMapping"`
+}
+
+type DeleteRelationParams struct {
+	Table string `json:"table"`
+	Name  string `json:"name"`
+}
+
 type Action struct {
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params"`
@@ -80,16 +105,13 @@ func AddMigration(description string) (string, error) {
 	dateId := time.Now().UTC().Format("20060102150405")
 
 	descriptionId := strings.ToLower(description)
-	fmt.Println(descriptionId)
 	descriptionId = strings.Replace(descriptionId, " ", "_", -1)
-	fmt.Println(descriptionId)
 
 	descriptionIdLength := len(descriptionId)
 	if descriptionIdLength > 50 {
 		descriptionIdLength = 50
 	}
 	descriptionId = descriptionId[:descriptionIdLength]
-	fmt.Println(descriptionId)
 
 	var fileName string
 	if descriptionId != "" {
@@ -352,4 +374,43 @@ func DeletePrimaryKey(tableName string, columnName string) (string, error) {
 	}
 
 	return addActionToMigrationFile("deletePrimaryKey", params)
+}
+
+func AddRelation(relationName string, relationType RelationType, table string, remoteTable string, columnsMapping []ColumnsMap) (string, error) {
+
+	if strings.TrimSpace(table) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	if strings.TrimSpace(relationName) == "" {
+		return "", fmt.Errorf("relation name is required /n")
+	}
+
+	params := AddRelationParams{
+		Name:           relationName,
+		Table:          table,
+		Type:           relationType,
+		RemoteTable:    remoteTable,
+		ColumnsMapping: columnsMapping,
+	}
+
+	return addActionToMigrationFile("addRelation", params)
+}
+
+func DeleteRelation(table string, relationName string) (string, error) {
+
+	if strings.TrimSpace(table) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	if strings.TrimSpace(relationName) == "" {
+		return "", fmt.Errorf("relation name is required /n")
+	}
+
+	params := DeleteRelationParams{
+		Name:  relationName,
+		Table: table,
+	}
+
+	return addActionToMigrationFile("deleteRelation", params)
 }

@@ -185,6 +185,22 @@ func main() {
 					Usage:  "sync migrations",
 					Action: syncMigrations,
 				},
+				{
+					Name:  "relation",
+					Usage: "define table relations",
+					Subcommands: []cli.Command{
+						{
+							Name:      "add",
+							ArgsUsage: "relation add relationName relationType tableName remoteTableName 'columnName1:remoteColumnName1;columnName2:remoteColumnName2'",
+							Action:    addRelation,
+						},
+						{
+							Name:      "delete",
+							ArgsUsage: "relation delete table relationName",
+							Action:    deleteRelation,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -396,8 +412,8 @@ func startBus(c *cli.Context) error {
 func addMigration(c *cli.Context) error {
 	args := c.Args()
 	description := args.Get(0)
-	migrationFileName, err := db.AddMigration(description)
 
+	migrationFileName, err := db.AddMigration(description)
 	if err == nil {
 		fmt.Println(migrationFileName)
 	}
@@ -544,6 +560,68 @@ func listMigrations(c *cli.Context) error {
 	packedMigrations, _ := json.MarshalIndent(migrations, "", "  ")
 
 	fmt.Println(string(packedMigrations))
+	return nil
+}
+
+func parseColumnsMapping(mappingRaw string) (*[]db.ColumnsMap, error) {
+	mapping := []db.ColumnsMap{}
+
+	if mappingRaw != "" {
+		for _, rawMap := range strings.Split(mappingRaw, ";") {
+			splittedMap := strings.Split(rawMap, ":")
+
+			if len(splittedMap) != 2 {
+				return nil, fmt.Errorf("wrong columns mapping: %v\n", rawMap)
+			}
+
+			column := splittedMap[0]
+			remoteColumn := splittedMap[1]
+
+			mapping = append(mapping, db.ColumnsMap{
+				Column:       column,
+				RemoteColumn: remoteColumn,
+			})
+		}
+	}
+
+	return &mapping, nil
+}
+
+func addRelation(c *cli.Context) error {
+	args := c.Args()
+
+	relationName := args.Get(0)
+	relationType := args.Get(1)
+	table := args.Get(2)
+	remoteTable := args.Get(3)
+	rawMapping := args.Get(4)
+
+	columnsMapping, err := parseColumnsMapping(rawMapping)
+	if err != nil {
+		return err
+	}
+
+	updatedMigrationId, err := db.AddRelation(relationName, db.RelationType(relationType), table, remoteTable, *columnsMapping)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
+func deleteRelation(c *cli.Context) error {
+	args := c.Args()
+
+	table := args.Get(0)
+	relationName := args.Get(1)
+
+	updatedMigrationId, err := db.DeleteRelation(table, relationName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
 	return nil
 }
 

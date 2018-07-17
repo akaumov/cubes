@@ -1,8 +1,8 @@
 package db
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 )
 
 type Column struct {
@@ -12,15 +12,24 @@ type Column struct {
 	DefaultValue string `json:"defaultValue"`
 }
 
+type RemoteColumnName string
+
+type Relation struct {
+	Type           RelationType `json:"type"`
+	Name           string       `json:"name"`
+	RemoteTable    string       `json:"remoteTable"`
+	ColumnsMapping []ColumnsMap `json:"columnsMap"`
+}
+
 type Table struct {
 	Name        string       `json:"name"`
 	Columns     []Column     `json:"columns"`
 	PrimaryKeys []ColumnName `json:"primaryKeys"`
+	Relations   []Relation   `json:"relations"`
 }
 
 type Snapshot struct {
-	Version string  `json:"version"`
-	Tables  []Table `json:"tables"`
+	Tables []Table `json:"tables"`
 }
 
 func getActions(migrationVersion string, actionIndex int) (*[]Action, error) {
@@ -113,15 +122,6 @@ func GetStepBackSnapshot(migrationId string, actionIndex int) (*Snapshot, error)
 	return GetSnapshot(actions)
 }
 
-// func GetSnapshotForFutureActions(actions []Action) (*Snapshot, error) {
-// 	migrations, err := GetList()
-// 	if err != nil {
-// 		return nil, fmt.Errorf("can't read migrations: %v", err)
-// 	}
-
-// 	migrations = append(migrations, migration)
-// }
-
 func applyActionsToSnapshot(snapshot *Snapshot, actions []Action) error {
 
 	for _, action := range actions {
@@ -149,6 +149,12 @@ func applyActionsToSnapshot(snapshot *Snapshot, actions []Action) error {
 			break
 		case "deletePrimaryKey":
 			err = applyDeletePrimaryKeyFromSnapshot(snapshot, params.(DeletePrimaryKeyParams))
+			break
+		case "addRelation":
+			err = applyAddRelationToSnapshot(snapshot, params.(AddRelationParams))
+			break
+		case "deleteRelation":
+			err = applyDeleteRelationFromSnapshot(snapshot, params.(DeleteRelationParams))
 			break
 		}
 
@@ -185,6 +191,7 @@ func applyAddTableToSnapshot(snapshot *Snapshot, params AddTableParams) error {
 		Name:        params.Name,
 		Columns:     []Column{},
 		PrimaryKeys: []ColumnName{},
+		Relations:   []Relation{},
 	})
 
 	return nil
@@ -317,4 +324,42 @@ func applyDeletePrimaryKeyFromSnapshot(snapshot *Snapshot, params DeletePrimaryK
 
 	table.PrimaryKeys = append(table.PrimaryKeys[:keyIndex], table.PrimaryKeys[keyIndex+1:]...)
 	return nil
+}
+
+func applyAddRelationToSnapshot(snapshot *Snapshot, params AddRelationParams) error {
+
+	table := getTableFromSnapshot(snapshot, params.Table)
+	if table == nil {
+		return fmt.Errorf("table '%v' doesn't exist", params.Table)
+	}
+
+	remoteTable := getTableFromSnapshot(snapshot, params.RemoteTable)
+	if remoteTable == nil {
+		return fmt.Errorf("remote table '%v' doesn't exist", params.RemoteTable)
+	}
+
+	table.Relations = append(table.Relations, Relation{
+		Name:           params.Name,
+		Type:           params.Type,
+		RemoteTable:    params.RemoteTable,
+		ColumnsMapping: params.ColumnsMapping,
+	})
+	return nil
+}
+
+func applyDeleteRelationFromSnapshot(snapshot *Snapshot, params DeleteRelationParams) error {
+
+	table := getTableFromSnapshot(snapshot, params.Table)
+	if table == nil {
+		return fmt.Errorf("table '%v' doesn't exist", params.Table)
+	}
+
+	for index, relation := range table.Relations {
+		if relation.Name == params.Name {
+			table.Relations = append(table.Relations[:index], table.Relations[index+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("relation \"%v\" doesn't exist", params.Name)
 }
