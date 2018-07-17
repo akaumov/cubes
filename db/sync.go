@@ -225,6 +225,31 @@ func applyAddRelation(transaction *sql.Tx, params AddRelationParams) error {
 	return nil
 }
 
+func applyAddUniqueConstraint(transaction *sql.Tx, params AddUniqueConstraintParams) error {
+
+	columns := ""
+
+	for _, column := range params.Columns {
+		if columns == "" {
+			columns = fmt.Sprintf(`"%v"`, column)
+		} else {
+			columns += fmt.Sprintf(`, "%v"`, column)
+		}
+	}
+
+	query := fmt.Sprintf(`
+		ALTER TABLE "%v"
+			ADD CONSTRAINT "%v" UNIQUE (%v)
+	`, params.Table, params.Name, columns)
+
+	_, err := transaction.Exec(query)
+	if err != nil {
+		return fmt.Errorf("can't add unique constraint '%v' to table '%v': %v\n", params.Name, params.Table, err)
+	}
+
+	return nil
+}
+
 func applyDeleteRelation(transaction *sql.Tx, params DeleteRelationParams) error {
 
 	query := fmt.Sprintf(`
@@ -235,6 +260,21 @@ func applyDeleteRelation(transaction *sql.Tx, params DeleteRelationParams) error
 	_, err := transaction.Exec(query)
 	if err != nil {
 		return fmt.Errorf("can't delete relation '%v' to table '%v': %v\n", params.Name, params.Table, err)
+	}
+
+	return nil
+}
+
+func applyDeleteUniqueConstraint(transaction *sql.Tx, params DeleteUniqueConstraintParams) error {
+
+	query := fmt.Sprintf(`
+		ALTER TABLE "%v"
+			DROP CONSTRAINT "%v"
+	`, params.Table, params.Name)
+
+	_, err := transaction.Exec(query)
+	if err != nil {
+		return fmt.Errorf("can't delete unique constraint '%v' to table '%v': %v\n", params.Name, params.Table, err)
 	}
 
 	return nil
@@ -369,6 +409,12 @@ func applyMigrationActions(transaction *sql.Tx, migration Migration) error {
 		case "deleteRelation":
 			err = applyDeleteRelation(transaction, params.(DeleteRelationParams))
 			break
+		case "addUniqueConstraint":
+			err = applyAddUniqueConstraint(transaction, params.(AddUniqueConstraintParams))
+			break
+		case "deleteUniqueConstraint":
+			err = applyDeleteUniqueConstraint(transaction, params.(DeleteUniqueConstraintParams))
+			break
 		}
 
 		if err != nil {
@@ -459,6 +505,24 @@ func decodeAction(method string, params json.RawMessage) (string, interface{}, e
 		}
 
 		return method, deleteRelationParams, nil
+
+	case "addUniqueConstraint":
+		var addUniqueConstraintParams AddUniqueConstraintParams
+		err = json.Unmarshal(params, &addUniqueConstraintParams)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return method, addUniqueConstraintParams, nil
+
+	case "deleteUniqueConstraint":
+		var deleteUniqueConstraintParams DeleteUniqueConstraintParams
+		err = json.Unmarshal(params, &deleteUniqueConstraintParams)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return method, deleteUniqueConstraintParams, nil
 	}
 
 	return "", nil, nil

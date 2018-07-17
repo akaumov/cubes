@@ -201,6 +201,22 @@ func main() {
 						},
 					},
 				},
+				{
+					Name:  "unique",
+					Usage: "define unique constraints",
+					Subcommands: []cli.Command{
+						{
+							Name:      "add",
+							ArgsUsage: "unique add constraintName tableName 'columnName1;columnName2'",
+							Action:    addUniqueConstraint,
+						},
+						{
+							Name:      "delete",
+							ArgsUsage: "unique delete table constraintName",
+							Action:    deleteUniqueConstraint,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -617,6 +633,39 @@ func deleteRelation(c *cli.Context) error {
 	relationName := args.Get(1)
 
 	updatedMigrationId, err := db.DeleteRelation(table, relationName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
+func addUniqueConstraint(c *cli.Context) error {
+	args := c.Args()
+
+	constraintName := args.Get(0)
+	table := args.Get(1)
+	rawColumns := args.Get(2)
+
+	columns := strings.Split(rawColumns, ";")
+
+	updatedMigrationId, err := db.AddUniqueConstraint(constraintName, table, columns)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
+func deleteUniqueConstraint(c *cli.Context) error {
+	args := c.Args()
+
+	table := args.Get(0)
+	relationName := args.Get(1)
+
+	updatedMigrationId, err := db.DeleteUniqueConstraint(table, relationName)
 	if err != nil {
 		return err
 	}

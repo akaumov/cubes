@@ -48,9 +48,15 @@ type DeletePrimaryKeyParams struct {
 	Column string `json:"column"`
 }
 
-type RenameColumnParams struct {
-	OldName string `json:"oldName"`
-	NewName string `json:"newName"`
+type AddUniqueConstraintParams struct {
+	Name    string   `json:"name"`
+	Table   string   `json:"table"`
+	Columns []string `json:"columns"`
+}
+
+type DeleteUniqueConstraintParams struct {
+	Table string `json:"table"`
+	Name  string `json:"name"`
 }
 
 type RelationType string
@@ -413,4 +419,45 @@ func DeleteRelation(table string, relationName string) (string, error) {
 	}
 
 	return addActionToMigrationFile("deleteRelation", params)
+}
+
+func AddUniqueConstraint(constrtaintName string, table string, columns []string) (string, error) {
+
+	if strings.TrimSpace(table) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	if strings.TrimSpace(constrtaintName) == "" {
+		return "", fmt.Errorf("constraint name is required /n")
+	}
+
+	if len(columns) == 0 {
+		return "", fmt.Errorf("columns are required /n")
+	}
+
+	params := AddUniqueConstraintParams{
+		Name:    constrtaintName,
+		Table:   table,
+		Columns: columns,
+	}
+
+	return addActionToMigrationFile("addUniqueConstraint", params)
+}
+
+func DeleteUniqueConstraint(table string, constrtaintName string) (string, error) {
+
+	if strings.TrimSpace(table) == "" {
+		return "", fmt.Errorf("table name is required /n")
+	}
+
+	if strings.TrimSpace(constrtaintName) == "" {
+		return "", fmt.Errorf("constraint name is required /n")
+	}
+
+	params := DeleteUniqueConstraintParams{
+		Name:  constrtaintName,
+		Table: table,
+	}
+
+	return addActionToMigrationFile("deleteUniqueConstraint", params)
 }

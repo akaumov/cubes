@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type Column struct {
@@ -21,11 +22,17 @@ type Relation struct {
 	ColumnsMapping []ColumnsMap `json:"columnsMap"`
 }
 
+type UniqueConstraint struct {
+	Name    string   `json:"name"`
+	Columns []string `json:"columns"`
+}
+
 type Table struct {
-	Name        string       `json:"name"`
-	Columns     []Column     `json:"columns"`
-	PrimaryKeys []ColumnName `json:"primaryKeys"`
-	Relations   []Relation   `json:"relations"`
+	Name              string             `json:"name"`
+	Columns           []Column           `json:"columns"`
+	PrimaryKeys       []ColumnName       `json:"primaryKeys"`
+	Relations         []Relation         `json:"relations"`
+	UniqueConstraints []UniqueConstraint `json:"uniqueConstraints"`
 }
 
 type Snapshot struct {
@@ -155,6 +162,12 @@ func applyActionsToSnapshot(snapshot *Snapshot, actions []Action) error {
 			break
 		case "deleteRelation":
 			err = applyDeleteRelationFromSnapshot(snapshot, params.(DeleteRelationParams))
+			break
+		case "addUniqueConstraint":
+			err = applyAddUniqueConstraintToSnapshot(snapshot, params.(AddUniqueConstraintParams))
+			break
+		case "deleteUniqueConstraint":
+			err = applyDeleteUniqueConstraintFromSnapshot(snapshot, params.(DeleteUniqueConstraintParams))
 			break
 		}
 
@@ -328,6 +341,10 @@ func applyDeletePrimaryKeyFromSnapshot(snapshot *Snapshot, params DeletePrimaryK
 
 func applyAddRelationToSnapshot(snapshot *Snapshot, params AddRelationParams) error {
 
+	if strings.TrimSpace(params.Name) == "" {
+		return fmt.Errorf("relation name is required")
+	}
+
 	table := getTableFromSnapshot(snapshot, params.Table)
 	if table == nil {
 		return fmt.Errorf("table '%v' doesn't exist", params.Table)
@@ -349,6 +366,10 @@ func applyAddRelationToSnapshot(snapshot *Snapshot, params AddRelationParams) er
 
 func applyDeleteRelationFromSnapshot(snapshot *Snapshot, params DeleteRelationParams) error {
 
+	if strings.TrimSpace(params.Name) == "" {
+		return fmt.Errorf("relation name is required")
+	}
+
 	table := getTableFromSnapshot(snapshot, params.Table)
 	if table == nil {
 		return fmt.Errorf("table '%v' doesn't exist", params.Table)
@@ -362,4 +383,47 @@ func applyDeleteRelationFromSnapshot(snapshot *Snapshot, params DeleteRelationPa
 	}
 
 	return fmt.Errorf("relation \"%v\" doesn't exist", params.Name)
+}
+
+func applyAddUniqueConstraintToSnapshot(snapshot *Snapshot, params AddUniqueConstraintParams) error {
+
+	if strings.TrimSpace(params.Name) == "" {
+		return fmt.Errorf("constraint name is required")
+	}
+
+	table := getTableFromSnapshot(snapshot, params.Table)
+	if table == nil {
+		return fmt.Errorf("table '%v' doesn't exist", params.Table)
+	}
+
+	if len(params.Name) == 0 {
+		return fmt.Errorf("columns are required")
+	}
+
+	table.UniqueConstraints = append(table.UniqueConstraints, UniqueConstraint{
+		Name:    params.Name,
+		Columns: params.Columns,
+	})
+	return nil
+}
+
+func applyDeleteUniqueConstraintFromSnapshot(snapshot *Snapshot, params DeleteUniqueConstraintParams) error {
+
+	if strings.TrimSpace(params.Name) == "" {
+		return fmt.Errorf("constraint name is required")
+	}
+
+	table := getTableFromSnapshot(snapshot, params.Table)
+	if table == nil {
+		return fmt.Errorf("table '%v' doesn't exist", params.Table)
+	}
+
+	for index, constraint := range table.UniqueConstraints {
+		if constraint.Name == params.Name {
+			table.UniqueConstraints = append(table.UniqueConstraints[:index], table.UniqueConstraints[index+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("constraint \"%v\" doesn't exist", params.Name)
 }
