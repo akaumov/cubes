@@ -169,6 +169,23 @@ func main() {
 						},
 					},
 				},
+
+				{
+					Name:  "primary",
+					Usage: "operations with primary keys",
+					Subcommands: []cli.Command{
+						{
+							Name:   "add",
+							Usage:  "add tableName columnName",
+							Action: addPrimaryKey,
+						},
+						{
+							Name:   "delete",
+							Usage:  "delete tableName columnName",
+							Action: deletePrimaryKey,
+						},
+					},
+				},
 				{
 					Name:   "sync",
 					Usage:  "sync migrations",
@@ -473,6 +490,50 @@ func deleteColumn(c *cli.Context) error {
 	return nil
 }
 
+func addPrimaryKey(c *cli.Context) error {
+	args := c.Args()
+
+	tableName := args.Get(0)
+	if tableName == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	columnName := args.Get(1)
+	if columnName == "" {
+		return fmt.Errorf("column name is required")
+	}
+
+	updatedMigrationId, err := db.AddPrimaryKey(tableName, columnName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
+func deletePrimaryKey(c *cli.Context) error {
+	args := c.Args()
+
+	tableName := args.Get(0)
+	if tableName == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	columnName := args.Get(1)
+	if columnName == "" {
+		return fmt.Errorf("column name is required")
+	}
+
+	updatedMigrationId, err := db.DeletePrimaryKey(tableName, columnName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(updatedMigrationId)
+	return nil
+}
+
 func listMigrations(c *cli.Context) error {
 	migrations, err := db.GetList()
 	if err != nil {
@@ -486,7 +547,7 @@ func listMigrations(c *cli.Context) error {
 }
 
 func migrationSnapshot(c *cli.Context) error {
-	snapshot, err := db.GetSnapshot()
+	snapshot, err := db.GetCurrentSnapshot()
 	if err != nil {
 		return err
 	}
