@@ -153,7 +153,7 @@ func applyActionsToSnapshot(snapshot *Snapshot, actions []Action) error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("can't apply action %v: %v/n", params, err)
+			return fmt.Errorf("can't apply action '%v' %v: %v/n", method, params, err)
 		}
 	}
 

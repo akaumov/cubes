@@ -75,50 +75,80 @@ func GetMigrationsDirectoryPath() (string, error) {
 	return directory, nil
 }
 
-func AddMigration(description string) error {
+func AddMigration(description string) (string, error) {
 
-	id := time.Now().UTC().Format("20060102150405")
-	fileName := id + ".json"
+	dateId := time.Now().UTC().Format("20060102150405")
+
+	descriptionId := strings.ToLower(description)
+	fmt.Println(descriptionId)
+	descriptionId = strings.Replace(descriptionId, " ", "_", -1)
+	fmt.Println(descriptionId)
+
+	descriptionIdLength := len(descriptionId)
+	if descriptionIdLength > 50 {
+		descriptionIdLength = 50
+	}
+	descriptionId = descriptionId[:descriptionIdLength]
+	fmt.Println(descriptionId)
+
+	var fileName string
+	if descriptionId != "" {
+		fileName = fmt.Sprintf("%v_%v.json", dateId, descriptionId)
+	} else {
+		fileName = fmt.Sprintf("%v.json", dateId)
+	}
+
 	migration := Migration{
 		SchemaVersion: "1",
-		Id:            id,
+		Id:            dateId,
 		Description:   description,
 		Actions:       []Action{},
 	}
 
 	migrationsDir, err := GetMigrationsDirectoryPath()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	//TODO: add checking usage of instance name
 	if _, err := os.Stat(migrationsDir); err != nil {
 		if !os.IsNotExist(err) {
-			return err
+			return "", err
 		}
 
 		err = os.Mkdir(migrationsDir, 0777)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	packedMigration, err := json.MarshalIndent(migration, "", "  ")
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return ioutil.WriteFile(filepath.Join(migrationsDir, fileName), packedMigration, 0777)
+	return fileName, ioutil.WriteFile(filepath.Join(migrationsDir, fileName), packedMigration, 0777)
 }
 
 func getMigrationPath(id string) (string, error) {
 
-	migrationsDirectory, err := GetMigrationsDirectoryPath()
+	migrationsDirectoryPath, err := GetMigrationsDirectoryPath()
 	if err != nil {
 		return "", err
 	}
 
-	migrationPath := filepath.Join(migrationsDirectory, id+".json")
+	configsPathPattern := filepath.Join(migrationsDirectoryPath, id+"*.json")
+	files, err := filepath.Glob(configsPathPattern)
+	if err != nil {
+		return "", err
+	}
+
+	if len(files) == 0 {
+		return "", fmt.Errorf("no such migration")
+	}
+
+	_, fileName := filepath.Split(files[0])
+	migrationPath := filepath.Join(migrationsDirectoryPath, fileName)
 	return migrationPath, nil
 }
 
@@ -158,11 +188,12 @@ func GetList() (*[]Migration, error) {
 
 	configsPathPattern := filepath.Join(migrationsDirectoryPath, "*.json")
 	files, err := filepath.Glob(configsPathPattern)
-	sort.Strings(files)
 
 	if err != nil {
 		return nil, err
 	}
+
+	sort.Strings(files)
 
 	result := []Migration{}
 

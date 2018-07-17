@@ -107,14 +107,8 @@ func main() {
 			Usage: "manage migrations",
 			Subcommands: []cli.Command{
 				{
-					Name:  "add",
-					Usage: "add migrationDescription",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "description",
-							Usage: "description text: --descrtiption 'description text'",
-						},
-					},
+					Name:   "add",
+					Usage:  "add migrationDescription",
 					Action: addMigration,
 				},
 				{
@@ -400,8 +394,15 @@ func startBus(c *cli.Context) error {
 }
 
 func addMigration(c *cli.Context) error {
-	description := c.String("description")
-	return db.AddMigration(description)
+	args := c.Args()
+	description := args.Get(0)
+	migrationFileName, err := db.AddMigration(description)
+
+	if err == nil {
+		fmt.Println(migrationFileName)
+	}
+
+	return err
 }
 
 func addTable(c *cli.Context) error {
