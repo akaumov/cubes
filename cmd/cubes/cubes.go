@@ -15,17 +15,19 @@ import (
 	"github.com/urfave/cli"
 )
 
-func initProject(c *cli.Context) error {
-	return nil
-}
-
 func main() {
 	app := cli.NewApp()
+	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
 		{
 			Name:   "init",
 			Usage:  "init project",
+			ArgsUsage: "projectName [description]",
 			Action: initProject,
+		},		{
+			Name:   "start",
+			Usage:  "start project",
+			Action: startProject,
 		},
 		{
 			Name:   "list",
@@ -319,6 +321,25 @@ func parseInstanceParams(rawParams string) (*map[string]string, error) {
 	}
 
 	return &params, nil
+}
+
+
+func initProject(c *cli.Context) error {
+	args := c.Args()
+
+	projectName := args.Get(0)
+	description := args.Get(1)
+
+	if projectName == "" {
+		return fmt.Errorf("project name is required")
+	}
+
+	return global.InitProject(projectName, description)
+}
+
+
+func startProject(c *cli.Context) error {
+	return global.StartProject()
 }
 
 func instanceAdd(c *cli.Context) error {
